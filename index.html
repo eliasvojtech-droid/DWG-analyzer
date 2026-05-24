@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DWG Block Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0f0f0f;--bg2:#171717;--bg3:#1e1e1e;--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);--text:#e8e8e8;--text2:#888;--text3:#444;--accent:#4a9eff;--green:#4ecb8d;--red:#e06c75;--yellow:#e5c07b;--orange:#f0a855}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{height:38px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
+.logo{width:22px;height:22px;background:var(--accent);border-radius:3px;display:flex;align-items:center;justify-content:center}
+.logo svg{width:13px;height:13px;fill:#000}
+.app-title{font-family:monospace;font-size:12px;font-weight:500;letter-spacing:.06em;color:var(--text2)}
+.oda-ok{margin-left:auto;font-family:monospace;font-size:11px;color:var(--green)}
+.oda-err{margin-left:auto;font-family:monospace;font-size:11px;color:var(--red);cursor:pointer;text-decoration:underline}
+.mode-bar{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0}
+.mode-tab{font-family:monospace;font-size:12px;padding:10px 18px;cursor:pointer;border:none;background:none;color:var(--text3);border-bottom:2px solid transparent;letter-spacing:.05em}
+.mode-tab:hover{color:var(--text)}
+.mode-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.body{display:flex;flex:1;overflow:hidden}
+.sidebar{width:250px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-top{padding:14px;border-bottom:1px solid var(--border)}
+.btn-primary{width:100%;padding:9px;background:var(--accent);color:#000;border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px}
+.btn-primary:hover{opacity:.85}
+.btn-primary:disabled{opacity:.4;cursor:default}
+.file-list{flex:1;overflow-y:auto}
+.file-item{padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.file-item:hover{background:var(--bg3)}
+.file-item.active{background:rgba(74,158,255,.1);border-left:2px solid var(--accent)}
+.file-name{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace}
+.file-meta{font-size:11px;color:var(--text3);margin-top:2px}
+.file-err-msg{font-size:11px;color:var(--red);margin-top:2px}
+.sidebar-empty{padding:20px;text-align:center;color:var(--text3);font-size:12px;line-height:1.8}
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.mode-panel{display:none;flex:1;overflow:hidden;flex-direction:column}
+.mode-panel.active{display:flex}
+.welcome{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.welcome-icon{font-size:44px}
+.welcome-title{font-size:15px;font-weight:600;font-family:monospace}
+.welcome-sub{font-size:13px;color:var(--text2);text-align:center;line-height:1.8}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
+.stat{background:var(--bg2);padding:13px 18px}
+.stat .lbl{font-size:10px;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px;font-family:monospace}
+.stat .val{font-size:21px;font-weight:600;font-family:monospace}
+.stat .val.sm{font-size:13px;padding-top:5px}
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2);padding:0 18px;flex-shrink:0}
+.tab{font-family:monospace;font-size:11px;padding:9px 13px;cursor:pointer;border:none;background:none;color:var(--text3);border-bottom:2px solid transparent;letter-spacing:.05em}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.panel{display:none;flex:1;overflow-y:auto;padding:16px}
+.panel.active{display:block}
+.panel.active{display:block}
+.block-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:7px}
+.block-card{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:9px;cursor:pointer;transition:border-color .15s}
+.block-card:hover{border-color:var(--border2)}
+.block-card.selected{border-color:var(--accent)}
+.block-preview{width:100%;height:80px;background:var(--bg3);border-radius:3px;margin-bottom:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.block-name{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace}
+.block-count{font-size:11px;color:var(--text3);margin-top:2px;font-family:monospace;display:flex;justify-content:space-between}
+.chart-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:16px}
+.map-ctrl{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.map-ctrl label{font-size:11px;color:var(--text3);font-family:monospace}
+.map-ctrl select,.map-ctrl input{font-size:12px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 9px;border-radius:4px;font-family:monospace}
+.map-ctrl input{width:160px}
+.map-count{font-size:11px;color:var(--text3);font-family:monospace}
+.attr-sel{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.attr-sel button{font-size:11px;padding:3px 11px;background:none;border:1px solid var(--border2);color:var(--text2);border-radius:3px;cursor:pointer;font-family:monospace}
+.attr-sel button.active{border-color:var(--accent);color:var(--accent);background:rgba(74,158,255,.07)}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-family:monospace;font-size:12px}
+th{text-align:left;padding:6px 10px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:11px;white-space:nowrap}
+td{padding:5px 10px;border-bottom:1px solid var(--border)}
+tr:hover td{background:var(--bg3)}
+.empty{font-size:12px;color:var(--text3);padding:20px 0;text-align:center;font-family:monospace}
+/* Mapa */
+#map-container{min-height:400px}
+.map-axis{stroke:rgba(255,255,255,0.08);stroke-width:1}
+.map-axis-label{font-family:monospace;font-size:10px;fill:#444}
+.map-dot{cursor:crosshair;transition:r .1s}
+.map-dot:hover{r:7}
+#map-tooltip .tt-name{font-family:monospace;font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:6px}
+#map-tooltip .tt-coords{font-family:monospace;font-size:11px;color:var(--text2);margin-bottom:6px}
+#map-tooltip .tt-preview{width:120px;height:80px;background:var(--bg3);border-radius:3px;margin-bottom:6px;overflow:hidden}
+#map-tooltip .tt-attrs{font-family:monospace;font-size:10px;color:var(--text3);max-height:80px;overflow-y:auto}
+#map-tooltip .tt-attr-row{display:flex;gap:6px;margin-bottom:2px}
+#map-tooltip .tt-tag{color:var(--accent)}
+/* Porovnání */
+.cmp-layout{display:flex;flex:1;overflow:hidden}
+.cmp-setup{flex:1;display:flex;flex-direction:column;padding:16px;gap:10px;border-right:1px solid var(--border);overflow-y:auto;max-width:320px}
+.cmp-setup h3{font-family:monospace;font-size:10px;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px}
+.rev-box{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:10px;display:flex;align-items:center;gap:8px}
+.rev-name{font-family:monospace;font-size:12px;font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text3)}
+.rev-name.set{color:var(--text)}
+.btn-rev{padding:6px 12px;background:none;border:1px solid var(--border2);color:var(--text2);border-radius:4px;font-size:11px;cursor:pointer;font-family:monospace;white-space:nowrap}
+.btn-rev:hover{border-color:var(--accent);color:var(--accent)}
+.btn-compare{width:100%;padding:10px;background:var(--accent);color:#000;border:none;border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;font-family:monospace}
+.btn-compare:hover{opacity:.85}
+.btn-compare:disabled{opacity:.4;cursor:default}
+.tol-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);font-family:monospace}
+.tol-row input{width:70px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:4px;font-family:monospace;font-size:12px}
+.cmp-info{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px;font-family:monospace;line-height:2;text-align:center;padding:20px}
+.cmp-results{flex:1;overflow:hidden;display:none;flex-direction:column}
+.cmp-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
+.cmp-stat{background:var(--bg2);padding:12px 16px}
+.cmp-stat .lbl{font-size:10px;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px;font-family:monospace}
+.cmp-stat .val{font-size:20px;font-weight:600;font-family:monospace}
+.cmp-stat .val.green{color:var(--green)}
+.cmp-stat .val.red{color:var(--red)}
+.cmp-stat .val.yellow{color:var(--yellow)}
+.back-btn{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);font-family:monospace;cursor:pointer;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0}
+.back-btn:hover{color:var(--accent)}
+.filter-row{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.filter-btn{font-size:11px;padding:3px 12px;background:none;border:1px solid var(--border2);color:var(--text2);border-radius:3px;cursor:pointer;font-family:monospace}
+.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(74,158,255,.07)}
+.cmp-row{display:grid;grid-template-columns:minmax(160px,1fr) 70px 70px 70px 110px;border-bottom:1px solid var(--border);font-family:monospace;font-size:12px}
+.cmp-row.header{font-size:10px;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;background:var(--bg2);position:sticky;top:0;z-index:1}
+.cmp-row>div{padding:6px 10px}
+.cmp-row .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmp-row .cnt{text-align:right}
+.cmp-row .diff.pos{color:var(--green)}
+.cmp-row .diff.neg{color:var(--red)}
+.cmp-row .diff.zero{color:var(--text3)}
+.cmp-row:hover>div{background:var(--bg3)}
+.badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:3px;font-family:monospace;font-weight:500}
+.badge.new{background:rgba(78,203,141,.15);color:var(--green)}
+.badge.deleted{background:rgba(224,108,117,.15);color:var(--red)}
+.badge.changed{background:rgba(229,192,123,.15);color:var(--yellow)}
+.badge.same{background:rgba(255,255,255,.05);color:var(--text3)}
+.diff-container{flex:1;overflow:hidden;background:#1a1f26;display:flex;align-items:center;justify-content:center}
+.diff-container svg{width:100%;height:100%;display:block}
+/* History */
+.history-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.history-item{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:8px 12px;cursor:pointer}
+.history-item:hover{border-color:var(--border2)}
+.history-item .h-files{font-family:monospace;font-size:11px;color:var(--text);margin-bottom:2px}
+.history-item .h-meta{font-size:11px;color:var(--text3);font-family:monospace}
+.history-badges{display:flex;gap:4px;margin-top:4px}
+/* Loading */
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:99}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.overlay-msg{font-size:13px;color:var(--text2);font-family:monospace}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+/* Chat */
+#chat-btn{position:fixed;bottom:20px;right:20px;width:46px;height:46px;background:var(--accent);border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:100;box-shadow:0 2px 12px rgba(74,158,255,0.4);transition:opacity .15s}
+#chat-btn:hover{opacity:.85}
+#chat-panel{position:fixed;bottom:76px;right:20px;width:360px;height:520px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;display:none;flex-direction:column;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden}
+#chat-panel.open{display:flex}
+.chat-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.chat-header-title{font-family:monospace;font-size:12px;font-weight:500;flex:1}
+.chat-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:0 2px}.chat-close:hover{color:var(--text)}
+.chat-key-bar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-shrink:0;background:rgba(74,158,255,0.05)}
+.chat-key-bar input{flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:5px 8px;border-radius:4px;font-family:monospace;font-size:11px}
+.chat-key-bar input::placeholder{color:var(--text3)}
+.chat-key-save{padding:5px 10px;background:var(--accent);color:#000;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:monospace;font-weight:600;white-space:nowrap}
+.chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.chat-msg{max-width:88%;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.chat-msg.user{background:rgba(74,158,255,0.15);border:1px solid rgba(74,158,255,0.25);align-self:flex-end;color:var(--text)}
+.chat-msg.assistant{background:var(--bg3);border:1px solid var(--border);align-self:flex-start;color:var(--text)}
+.chat-msg.error{background:rgba(224,108,117,0.12);border:1px solid rgba(224,108,117,0.3);color:var(--red);align-self:flex-start}
+.chat-thinking{align-self:flex-start;color:var(--text3);font-size:13px;font-family:monospace;padding:4px 0;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+.chat-welcome{text-align:center;color:var(--text3);font-size:12px;font-family:monospace;padding:24px 16px;line-height:2}
+.chat-input-row{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:6px;flex-shrink:0}
+.chat-input-row textarea{flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:7px 10px;border-radius:6px;font-family:'Segoe UI',sans-serif;font-size:13px;resize:none;line-height:1.4;max-height:120px;min-height:36px;overflow-y:auto}
+.chat-input-row textarea:focus{outline:none;border-color:var(--accent)}
+.chat-input-row textarea::placeholder{color:var(--text3)}
+.chat-send{padding:7px 14px;background:var(--accent);color:#000;border:none;border-radius:6px;cursor:pointer;font-size:16px;font-weight:700;align-self:flex-end;line-height:1}
+.chat-send:disabled{opacity:.4;cursor:default}
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <div class="logo"><svg viewBox="0 0 12 12"><path d="M0 0h5v5H0zM7 0h5v5H7zM0 7h5v5H0zM8 7h4v2H8zM8 10h4v2H8zM7 8h2v4H7z"/></svg></div>
+  <span class="app-title">DWG BLOCK ANALYZER</span>
+  <span id="oda-tag">hledám ODA...</span>
+</div>
+
+<div class="mode-bar">
+  <button class="mode-tab active" onclick="switchMode('analyze',this)">ANALÝZA</button>
+  <button class="mode-tab" onclick="switchMode('compare',this)">POROVNÁNÍ REVIZÍ</button>
+</div>
+
+<div class="body">
+  <div class="sidebar" id="sidebar-analyze">
+    <div class="sidebar-top">
+      <label class="btn-primary" style="display:block;text-align:center;cursor:pointer">
+        + Přidat DWG soubory
+        <input type="file" id="file-input" accept=".dwg,.DWG" multiple style="display:none" onchange="addFiles(this)">
+      </label>
+    </div>
+    <div class="file-list" id="file-list">
+      <div class="sidebar-empty">Zatím žádné soubory.<br>Klikni na tlačítko výše.</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- ANALÝZA -->
+    <div class="mode-panel active" id="mode-analyze">
+      <div class="welcome" id="welcome-analyze">
+        <div class="welcome-icon">📐</div>
+        <div class="welcome-title">DWG Block Analyzer</div>
+        <div class="welcome-sub">Přidej DWG soubory pomocí tlačítka vlevo.</div>
+      </div>
+      <div id="file-results" style="display:none;flex:1;overflow:hidden;flex-direction:column">
+        <div class="stat-row" id="stat-row"></div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('blocks',this)">BLOKY</button>
+          <button class="tab" onclick="switchTab('chart',this)">GRAF</button>
+          <button class="tab" onclick="switchTab('map',this)">MAPA XY</button>
+          <button class="tab" onclick="switchTab('attrs',this)">ATRIBUTY</button>
+        </div>
+        <div class="panel active" id="panel-blocks" style="display:block"><div class="block-grid" id="block-grid"></div></div>
+        <div class="panel" id="panel-chart"><div class="chart-wrap"><canvas id="chart-canvas" style="max-height:340px"></canvas></div></div>
+        <div class="panel" id="panel-map" style="display:none;padding:0;flex-direction:column">
+          <div class="map-ctrl" style="padding:10px 16px;flex-shrink:0">
+            <label>FILTR:</label>
+            <select id="map-filter" onchange="renderMap()"><option value="">Vše bloků</option></select>
+            <input type="text" id="map-search" placeholder="hledat blok..." oninput="renderMap()">
+            <span class="map-count" id="map-count"></span>
+            <button onclick="resetMapZoom()" style="font-family:monospace;font-size:11px;padding:3px 10px;background:none;border:1px solid var(--border2);color:var(--text2);border-radius:3px;cursor:pointer">reset zoom</button>
+          </div>
+          <div id="map-container" style="flex:1;position:relative;overflow:hidden;background:#161616;border-top:1px solid var(--border)">
+            <svg id="map-svg" style="width:100%;height:100%;display:block;cursor:crosshair"></svg>
+            <div id="map-tooltip" style="position:absolute;display:none;background:#1e1e1e;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:10px 12px;pointer-events:none;z-index:10;min-width:180px;max-width:260px;box-shadow:0 4px 16px rgba(0,0,0,0.5)"></div>
+          </div>
+        </div>
+        <div class="panel" id="panel-attrs">
+          <div class="attr-sel" id="attr-sel"></div>
+          <div class="tbl-wrap" id="attr-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POROVNÁNÍ -->
+    <div class="mode-panel" id="mode-compare">
+      <div id="cmp-setup-wrap" style="display:flex;flex:1;overflow:hidden">
+        <div class="cmp-layout">
+          <div class="cmp-setup">
+            <h3>Revize A (starší)</h3>
+            <div class="rev-box">
+              <span class="rev-name" id="rev-a-name">Soubor nevybrán</span>
+              <label class="btn-rev" style="cursor:pointer">Vybrat
+                <input type="file" id="rev-a-input" accept=".dwg,.DWG" style="display:none" onchange="selectRevFile('a',this)">
+              </label>
+            </div>
+            <h3>Revize B (novější)</h3>
+            <div class="rev-box">
+              <span class="rev-name" id="rev-b-name">Soubor nevybrán</span>
+              <label class="btn-rev" style="cursor:pointer">Vybrat
+                <input type="file" id="rev-b-input" accept=".dwg,.DWG" style="display:none" onchange="selectRevFile('b',this)">
+              </label>
+            </div>
+            <div class="tol-row">
+              <label>Tolerance:</label>
+              <input type="number" id="tolerance" value="1.0" min="0.01" step="0.1">
+              <span style="color:var(--text3)">jednotky</span>
+            </div>
+            <button class="btn-compare" id="btn-compare" onclick="runCompare()" disabled>Porovnat</button>
+            <div id="history-section" style="display:none">
+              <h3 style="margin-top:8px">Historie</h3>
+              <div class="history-list" id="history-list"></div>
+            </div>
+          </div>
+          <div class="cmp-info">
+            <div>
+              <div style="font-size:28px;margin-bottom:12px">⟷</div>
+              Appka najde:<br>
+              <span style="color:var(--green)">● přidané entity</span><br>
+              <span style="color:var(--red)">● smazané entity</span><br>
+              <span style="color:var(--orange)">● změněné délky čar</span><br>
+              <span style="color:var(--text3)">čáry · bloky · texty · šrafy</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cmp-results" id="cmp-results">
+        <div class="back-btn" onclick="backToSetup()">← Zpět</div>
+        <div class="cmp-summary" id="cmp-summary"></div>
+        <div class="tabs" style="padding:0 16px">
+          <button class="tab active" onclick="switchCmpTab('table',this)">TABULKA BLOKŮ</button>
+          <button class="tab" onclick="switchCmpTab('drawing',this)">VIZUÁLNÍ DIFF</button>
+          <button class="tab" onclick="switchCmpTab('stats',this)">STATISTIKY</button>
+        </div>
+        <div id="cmp-tab-table" style="flex:1;overflow-y:auto;padding:16px">
+          <div class="filter-row" id="cmp-filters"></div>
+          <div id="cmp-table"></div>
+        </div>
+        <div id="cmp-tab-stats" style="display:none;flex:1;overflow-y:auto;padding:16px">
+          <div id="stats-content"></div>
+        </div>
+        <div id="cmp-tab-drawing" style="display:none;flex:1;flex-direction:column;overflow:hidden;padding:16px;gap:8px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;align-items:center">
+            <select id="diff-layer-filter" onchange="applyDiffFilter()" style="font-family:monospace;font-size:11px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:4px">
+              <option value="">Všechny hladiny</option>
+            </select>
+            <div style="display:flex;gap:4px;flex-wrap:wrap" id="diff-type-filters">
+              <button class="filter-btn active" data-type="lines" onclick="toggleDiffType(this)">Čáry</button>
+              <button class="filter-btn active" data-type="blocks" onclick="toggleDiffType(this)">Bloky</button>
+              <button class="filter-btn active" data-type="texts" onclick="toggleDiffType(this)">Texty</button>
+              <button class="filter-btn active" data-type="moved" onclick="toggleDiffType(this)">Přesunuto</button>
+              <button class="filter-btn active" data-type="resized" onclick="toggleDiffType(this)">Délky</button>
+            </div>
+            <button onclick="resetDiffView()" style="font-family:monospace;font-size:11px;padding:3px 10px;background:none;border:1px solid var(--border2);color:var(--text2);border-radius:3px;cursor:pointer;margin-left:auto">reset zoom</button>
+          </div>
+          <div class="diff-container" id="diff-container" style="flex:1">
+            <span style="font-family:monospace;font-size:12px;color:var(--text3)">Klikni na záložku pro načtení</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay"><div class="spinner"></div><div class="overlay-msg" id="overlay-msg">Zpracovávám...</div></div>
+
+<!-- Floating chat button -->
+<button id="chat-btn" onclick="toggleChat()" title="AI Asistent">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+</button>
+
+<!-- Chat panel -->
+<div id="chat-panel">
+  <div class="chat-header">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span class="chat-header-title">AI Asistent</span>
+    <button class="chat-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div id="chat-key-bar" class="chat-key-bar" style="display:none">
+    <input type="password" id="chat-api-key" placeholder="Anthropic API klíč (sk-ant-...)" autocomplete="off">
+    <button class="chat-key-save" onclick="saveApiKey()">Uložit</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-welcome">
+      Zeptej se na obsah výkresu,<br>výsledky analýzy nebo<br>porovnání revizí.
+    </div>
+  </div>
+  <div class="chat-input-row">
+    <textarea id="chat-input" placeholder="Napiš zprávu... (Enter = odeslat)" rows="1" onkeydown="chatKeydown(event)" oninput="chatAutoResize(this)"></textarea>
+    <button class="chat-send" id="chat-send-btn" onclick="sendChat()">↑</button>
+  </div>
+</div>
+
+<script>
+const COLORS=['#4a9eff','#4ecb8d','#f0a855','#e06c75','#c678dd','#56b6c2','#e5c07b','#98c379','#abb2bf','#be5046','#61afef','#d19a66']
+let files=[],activeIdx=-1,chartInst=null
+let revA=null,revB=null,cmpData=null,cmpFilter='all',cmpHistory=[]
+let diffSvgLoaded=false
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+fetch('/api/check_oda').then(r=>r.json()).then(d=>{
+  const el=document.getElementById('oda-tag')
+  if(d.found){el.textContent='ODA ✓';el.className='oda-ok'}
+  else{el.textContent='ODA nenalezeno';el.className='oda-err';document.getElementById('btn-add').disabled=true;document.getElementById('btn-compare').disabled=true}
+})
+
+// ── Analýza ───────────────────────────────────────────────────────────────────
+async function addFiles(input){
+  const fileList = Array.from(input.files)
+  if(!fileList.length) return
+  const start = files.length
+  fileList.forEach(f=>files.push({name:f.name,path:f.name,loading:true}))
+  renderSidebar()
+  for(let i=0;i<fileList.length;i++){
+    showOverlay(`Převádím ${i+1}/${fileList.length}: ${fileList[i].name}`)
+    const fd = new FormData()
+    fd.append('file', fileList[i])
+    const res = await fetch('/api/upload', {method:'POST', body:fd})
+    const d = await res.json()
+    files[start+i] = d
+    renderSidebar()
+    if(i===0&&d.ok) selectFile(start)
+  }
+  hideOverlay()
+  if(files[start]&&files[start].ok) loadPreviews(files[start])
+  input.value=''
+}
+
+function renderSidebar(){
+  const list=document.getElementById('file-list')
+  if(!files.length){list.innerHTML='<div class="sidebar-empty">Zatím žádné soubory.<br>Klikni na tlačítko výše.</div>';return}
+  list.innerHTML=files.map((f,i)=>`
+    <div class="file-item${f.error?' error':''}${i===activeIdx?' active':''}" onclick="selectFile(${i})" title="${f.path||f.name||''}">
+      <span>${f.loading?'⏳':f.error?'❌':'📐'}</span>
+      <div style="min-width:0">
+        <div class="file-name">${f.file||f.name||''}</div>
+        ${f.loading?'<div class="file-meta">převádím...</div>':''}
+        ${f.error?`<div class="file-err-msg">${f.error}</div>`:''}
+        ${f.ok?`<div class="file-meta">${f.blocks.length} bloků · ${f.totalInserts} vložení</div>`:''}
+      </div>
+    </div>`).join('')
+}
+
+function selectFile(idx){
+  if(!files[idx]||files[idx].loading||files[idx].error)return
+  activeIdx=idx;renderSidebar();showResults(files[idx])
+  loadPreviews(files[idx])
+}
+
+async function loadPreviews(f){
+  if(!f.tmp_path&&!f.path) return
+  const r=await fetch('/api/block_previews',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:f.tmp_path||f.path})})
+  const d=await r.json()
+  if(!d.ok)return
+  f.previews=d.previews
+  if(activeIdx>=0&&files[activeIdx]===f) renderBlockGrid(f)
+}
+
+function showResults(f){
+  document.getElementById('welcome-analyze').style.display='none'
+  const r=document.getElementById('file-results');r.style.display='flex'
+  const withA=f.blocks.filter(b=>b.inserts.some(i=>i.attrs&&i.attrs.length>0)).length
+  document.getElementById('stat-row').innerHTML=`
+    <div class="stat"><div class="lbl">Celkem vložení</div><div class="val">${f.totalInserts}</div></div>
+    <div class="stat"><div class="lbl">Unikátních bloků</div><div class="val">${f.blocks.length}</div></div>
+    <div class="stat"><div class="lbl">S atributy</div><div class="val">${withA}</div></div>
+    <div class="stat"><div class="lbl">Nejčastější</div><div class="val sm">${f.blocks[0]?f.blocks[0].name:'—'}</div></div>`
+  renderBlockGrid(f);renderChart(f);renderMapFilter(f);renderAttrSelector(f);renderMapTable()
+}
+
+function renderBlockGrid(f){
+  f=f||(activeIdx>=0?files[activeIdx]:null);if(!f)return
+  document.getElementById('block-grid').innerHTML=f.blocks.map((b,i)=>{
+    const prev=f.previews&&f.previews[b.name]
+    const hasSvg=prev&&prev.svg
+    const hasDims=prev&&prev.dims
+    const previewHtml=hasSvg
+      ?`<div style="width:100%;height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center">${prev.svg}</div>`
+      :`<div style="display:flex;align-items:center;justify-content:center;color:${COLORS[i%COLORS.length]};font-family:monospace;font-size:9px;opacity:.5;height:100%">načítám...</div>`
+    const dims=hasDims?`<span style="font-size:10px;color:var(--text3);font-family:monospace">${prev.dims.w}×${prev.dims.h}</span>`:''
+    return`<div class="block-card" onclick="selectBlock('${b.name.replace(/'/g,"\\'")}',this)">
+      <div class="block-preview" style="background:var(--bg3)">${previewHtml}</div>
+      <div class="block-name" title="${b.name}">${b.name}</div>
+      <div class="block-count"><span>${b.count}×</span>${dims}</div>
+    </div>`
+  }).join('')
+}
+
+function renderChart(f){
+  const top=f.blocks.slice(0,25),ctx=document.getElementById('chart-canvas').getContext('2d')
+  if(chartInst)chartInst.destroy()
+  chartInst=new Chart(ctx,{type:'bar',data:{labels:top.map(b=>b.name),datasets:[{data:top.map(b=>b.count),backgroundColor:top.map((_,i)=>COLORS[i%COLORS.length]),borderRadius:3,borderWidth:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#555',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#555',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}}}}})
+}
+
+function renderMapFilter(f){
+  document.getElementById('map-filter').innerHTML='<option value="">Vše</option>'+(f.blocks||[]).map(b=>`<option value="${b.name}">${b.name} (${b.count})</option>`).join('')
+}
+
+// ── Interaktivní mapa ────────────────────────────────────────────────────────
+let mapZoom=1, mapPanX=0, mapPanY=0, mapDragging=false, mapLastX=0, mapLastY=0
+let mapTransform={minX:0,maxX:1,minY:0,maxY:1,W:800,H:500}
+let mapInserts=[]
+
+function renderMapFilter(f){
+  document.getElementById('map-filter').innerHTML='<option value="">Vše bloků</option>'+(f.blocks||[]).map(b=>`<option value="${b.name}">${b.name} (${b.count})</option>`).join('')
+}
+
+function resetMapZoom(){mapZoom=1;mapPanX=0;mapPanY=0;renderMap()}
+
+function renderMap(){
+  const f=activeIdx>=0?files[activeIdx]:null;if(!f||!f.inserts)return
+  const filter=document.getElementById('map-filter').value
+  const search=document.getElementById('map-search').value.toLowerCase()
+  let pts=f.inserts
+  if(filter)pts=pts.filter(i=>i.name===filter)
+  if(search)pts=pts.filter(i=>i.name.toLowerCase().includes(search))
+  document.getElementById('map-count').textContent=pts.length+' vložení'
+  mapInserts=pts
+
+  const svg=document.getElementById('map-svg')
+  const container=document.getElementById('map-container')
+  const W=container.clientWidth||800
+  const H=container.clientHeight||500
+
+  if(!pts.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#444" font-family="monospace" font-size="13">Žádná data</text>';return}
+
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y)
+  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys)
+  const rX=maxX-minX||1,rY=maxY-minY||1
+  const pad=48
+  const sc0=Math.min((W-pad*2)/rX,(H-pad*2)/rY)
+  const ox0=(W-rX*sc0)/2-minX*sc0
+  const oy0=(H+rY*sc0)/2+minY*sc0
+  mapTransform={minX,maxX,minY,maxY,W,H,sc0,ox0,oy0,pad}
+
+  function toSvg(x,y){
+    const sc=sc0*mapZoom
+    const ox=ox0+mapPanX+(mapZoom-1)*(W/2-ox0)
+    const oy=oy0+mapPanY+(mapZoom-1)*(oy0-H/2)
+    return{cx:ox+x*sc, cy:oy-y*sc}
+  }
+
+  const names=[...new Set(pts.map(p=>p.name))]
+  let html=''
+
+  // Grid
+  for(let g=0;g<=8;g++){
+    const x=pad+(W-pad*2)/8*g
+    html+=`<line x1="${x}" y1="${pad}" x2="${x}" y2="${H-pad}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`
+  }
+  for(let g=0;g<=5;g++){
+    const y=pad+(H-pad*2)/5*g
+    html+=`<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`
+  }
+
+  // Osa X popis
+  for(let g=0;g<=4;g++){
+    const ratio=g/4
+    const worldX=minX+rX*ratio
+    const svgX=pad+(W-pad*2)*ratio
+    html+=`<text x="${svgX}" y="${H-8}" text-anchor="middle" fill="#444" font-family="monospace" font-size="10">${worldX.toFixed(0)}</text>`
+  }
+  for(let g=0;g<=3;g++){
+    const ratio=g/3
+    const worldY=minY+rY*ratio
+    const svgY=H-pad-(H-pad*2)*ratio
+    html+=`<text x="4" y="${svgY+4}" fill="#444" font-family="monospace" font-size="10">${worldY.toFixed(0)}</text>`
+  }
+
+  // Body
+  pts.forEach((p,i)=>{
+    const bi=names.indexOf(p.name)
+    const col=COLORS[bi%COLORS.length]
+    const{cx,cy}=toSvg(p.x,p.y)
+    if(cx<-20||cx>W+20||cy<-20||cy>H+20)return
+    const attrsJson=JSON.stringify(p.attrs||[]).replace(/"/g,'&quot;')
+    html+=`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="${col}99" stroke="${col}" stroke-width="1.5" class="map-dot" data-name="${p.name.replace(/"/g,'&quot;')}" data-x="${p.x}" data-y="${p.y}" data-rot="${p.rot||0}" data-attrs="${attrsJson}"/>`
+  })
+
+  svg.innerHTML=html
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`)
+
+  // Tooltip eventi
+  svg.onmousemove=e=>{
+    const dot=e.target.closest('.map-dot')
+    const tip=document.getElementById('map-tooltip')
+    if(dot){
+      const name=dot.dataset.name
+      const x=parseFloat(dot.dataset.x)
+      const y=parseFloat(dot.dataset.y)
+      const rot=parseFloat(dot.dataset.rot)
+      const attrs=JSON.parse(dot.dataset.attrs.replace(/&quot;/g,'"'))
+      const prev=f.previews&&f.previews[name]
+      const previewHtml=prev&&prev.svg
+        ?`<div class="tt-preview">${prev.svg}</div>`
+        :`<div class="tt-preview" style="display:flex;align-items:center;justify-content:center;color:#555;font-size:10px;font-family:monospace">${name.slice(0,8)}</div>`
+      const attrsHtml=attrs.length
+        ?`<div class="tt-attrs">${attrs.map(a=>`<div class="tt-attr-row"><span class="tt-tag">${a.tag}</span><span>${a.value}</span></div>`).join('')}</div>`
+        :''
+      tip.innerHTML=`
+        <div class="tt-name">${name}</div>
+        ${previewHtml}
+        <div class="tt-coords">X: ${x.toFixed(3)}<br>Y: ${y.toFixed(3)}${rot?'<br>ROT: '+rot.toFixed(1)+'°':''}</div>
+        ${attrsHtml}`
+      // Pozice tooltipu
+      const rect=svg.getBoundingClientRect()
+      const tx=e.clientX-rect.left
+      const ty=e.clientY-rect.top
+      tip.style.display='block'
+      tip.style.left=(tx+14)+'px'
+      tip.style.top=Math.max(0,ty-20)+'px'
+      // Nepřetékej přes okraj
+      setTimeout(()=>{
+        const tw=tip.offsetWidth,th=tip.offsetHeight
+        if(tx+14+tw>W) tip.style.left=(tx-tw-10)+'px'
+        if(ty-20+th>H) tip.style.top=(H-th-4)+'px'
+      },0)
+    } else {
+      tip.style.display='none'
+    }
+    // Drag
+    if(mapDragging){
+      mapPanX+=e.clientX-mapLastX
+      mapPanY+=e.clientY-mapLastY
+      mapLastX=e.clientX;mapLastY=e.clientY
+      renderMap()
+    }
+  }
+  svg.onmouseleave=()=>document.getElementById('map-tooltip').style.display='none'
+  svg.onmousedown=e=>{if(e.button===0){mapDragging=true;mapLastX=e.clientX;mapLastY=e.clientY}}
+  svg.onmouseup=()=>mapDragging=false
+  svg.onwheel=e=>{
+    e.preventDefault()
+    const f2=e.deltaY>0?0.85:1.18
+    const rect=svg.getBoundingClientRect()
+    const mx=e.clientX-rect.left,my=e.clientY-rect.top
+    mapPanX=(mapPanX-mx)*f2+mx
+    mapPanY=(mapPanY-my)*f2+my
+    mapZoom*=f2
+    renderMap()
+  }
+}
+
+function renderMapTable(){renderMap()}
+
+function renderAttrSelector(f){
+  const wa=f.blocks.filter(b=>b.inserts.some(i=>i.attrs&&i.attrs.length>0))
+  const sel=document.getElementById('attr-sel'),cont=document.getElementById('attr-content')
+  if(!wa.length){sel.innerHTML='';cont.innerHTML='<div class="empty">Žádné bloky s atributy</div>';return}
+  sel.innerHTML=wa.map(b=>`<button onclick="showAttrs('${b.name.replace(/'/g,"\\'")}',this)">${b.name} <span style="opacity:.4">${b.count}</span></button>`).join('')
+  showAttrs(wa[0].name,sel.firstChild)
+}
+
+function showAttrs(name,btn){
+  document.querySelectorAll('.attr-sel button').forEach(b=>b.classList.remove('active'))
+  if(btn)btn.classList.add('active')
+  const f=files[activeIdx],block=f.blocks.find(b=>b.name===name),cont=document.getElementById('attr-content')
+  if(!block){cont.innerHTML='';return}
+  const wa=block.inserts.filter(i=>i.attrs&&i.attrs.length>0)
+  if(!wa.length){cont.innerHTML=`<div class="empty">Blok "${name}" nemá atributy</div>`;return}
+  const tags=[...new Set(wa.flatMap(i=>i.attrs.map(a=>a.tag)))]
+  cont.innerHTML=`<table><thead><tr><th>#</th><th>X</th><th>Y</th>${tags.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${wa.slice(0,200).map((ins,i)=>`<tr><td>${i+1}</td><td>${ins.x.toFixed(2)}</td><td>${ins.y.toFixed(2)}</td>${tags.map(t=>{const a=ins.attrs.find(a=>a.tag===t);return`<td>${a?a.value:'—'}</td>`}).join('')}</tr>`).join('')}</tbody></table>`
+}
+
+function selectBlock(name,el){
+  document.querySelectorAll('.block-card').forEach(c=>c.classList.remove('selected'));el.classList.add('selected')
+  switchTab('attrs',document.querySelectorAll('.tab')[3])
+  const t=[...document.querySelectorAll('.attr-sel button')].find(b=>b.textContent.trim().startsWith(name))
+  if(t)showAttrs(name,t)
+}
+
+function switchTab(name,el){
+  document.querySelectorAll('#mode-analyze .tab').forEach(t=>t.classList.remove('active'))
+  document.querySelectorAll('#mode-analyze .panel').forEach(p=>{p.classList.remove('active');p.style.display='none'})
+  el.classList.add('active')
+  const panel=document.getElementById('panel-'+name)
+  panel.classList.add('active')
+  panel.style.display=name==='map'?'flex':'block'
+  if(name==='map') setTimeout(()=>renderMap(),50)
+}
+
+// ── Porovnání ─────────────────────────────────────────────────────────────────
+async function selectRevFile(side, input){
+  const file = input.files[0]
+  if(!file) return
+  showOverlay('Nahrávám soubor...')
+  const fd = new FormData()
+  fd.append('file', file)
+  const r = await fetch('/api/upload_and_store', {method:'POST', body:fd})
+  const d = await r.json()
+  hideOverlay()
+  if(!d.ok){alert('Chyba: '+(d.error||'neznámá'));return}
+  if(side==='a'){
+    revA=d.tmp_path
+    const el=document.getElementById('rev-a-name');el.textContent=d.file;el.className='rev-name set'
+  } else {
+    revB=d.tmp_path
+    const el=document.getElementById('rev-b-name');el.textContent=d.file;el.className='rev-name set'
+  }
+  document.getElementById('btn-compare').disabled=!(revA&&revB)
+  input.value=''
+}
+
+async function runCompare(){
+  if(!revA||!revB)return
+  const tol=parseFloat(document.getElementById('tolerance').value)||1.0
+  showOverlay('Porovnávám bloky...')
+  const r=await fetch('/api/compare_blocks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path_a:revA,path_b:revB,tolerance:tol})})
+  cmpData=await r.json()
+  hideOverlay()
+  if(!cmpData.ok){alert('Chyba: '+cmpData.error);return}
+  cmpFilter='all';diffSvgLoaded=false
+  cmpHistory.unshift({file_a:cmpData.file_a,file_b:cmpData.file_b,time:new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}),summary:cmpData.summary,data:JSON.parse(JSON.stringify(cmpData)),revA,revB})
+  renderHistory();renderCompareResults()
+}
+
+function renderCompareResults(){
+  document.getElementById('cmp-setup-wrap').style.display='none'
+  const cr=document.getElementById('cmp-results');cr.style.display='flex'
+  const s=cmpData.summary
+  document.getElementById('cmp-summary').innerHTML=`
+    <div class="cmp-stat"><div class="lbl">Přidáno vložení</div><div class="val green">+${s.added_total}</div></div>
+    <div class="cmp-stat"><div class="lbl">Odebráno vložení</div><div class="val red">-${s.removed_total}</div></div>
+    <div class="cmp-stat"><div class="lbl">Přesunuto</div><div class="val yellow">${s.moved_total}</div></div>
+    <div class="cmp-stat"><div class="lbl">Beze změny</div><div class="val" style="color:var(--text3)">${s.same}</div></div>`
+  const filters=[{key:'all',label:`Vše (${cmpData.blocks.length})`},{key:'new',label:`Nové (${s.new})`},{key:'deleted',label:`Smazané (${s.deleted})`},{key:'changed',label:`Změněné (${s.changed})`},{key:'same',label:`Beze změny (${s.same})`}]
+  document.getElementById('cmp-filters').innerHTML=filters.map(f=>`<button class="filter-btn${cmpFilter===f.key?' active':''}" onclick="setCmpFilter('${f.key}',this)">${f.label}</button>`).join('')
+  renderCmpTable()
+  // Reset diff tab
+  document.getElementById('diff-container').innerHTML='<span style="font-family:monospace;font-size:12px;color:var(--text3)">Klikni na záložku pro načtení</span>'
+  diffSvgLoaded=false
+}
+
+function setCmpFilter(key,el){cmpFilter=key;document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderCmpTable()}
+
+function renderCmpTable(){
+  const rows=cmpFilter==='all'?cmpData.blocks:cmpData.blocks.filter(r=>r.status===cmpFilter)
+  const sl={new:'<span class="badge new">NOVÝ</span>',deleted:'<span class="badge deleted">SMAZÁN</span>',changed:'<span class="badge changed">ZMĚNA</span>',same:'<span class="badge same">BEZ ZMĚNY</span>'}
+  document.getElementById('cmp-table').innerHTML=`
+    <div class="cmp-row header"><div class="name">BLOK</div><div class="cnt">REV A</div><div class="cnt">REV B</div><div class="cnt">ROZDÍL</div><div>STAV</div></div>
+    ${rows.map(r=>{const diff=r.diff,dc=diff>0?'pos':diff<0?'neg':'zero',ds=diff>0?'+'+diff:String(diff);return`<div class="cmp-row"><div class="name" title="${r.name}">${r.name}</div><div class="cnt">${r.count_a||'—'}</div><div class="cnt">${r.count_b||'—'}</div><div class="cnt diff ${dc}">${diff!==0?ds:'='}</div><div>${sl[r.status]||r.status}</div></div>`}).join('')}
+    ${!rows.length?'<div class="empty">Žádné výsledky</div>':''}`
+}
+
+
+
+let diffZoom=1, diffPanX=0, diffPanY=0, diffDragging=false, diffLastX=0, diffLastY=0
+
+async function loadDiffDrawing(){
+  const cont=document.getElementById('diff-container')
+  cont.innerHTML='<div class="spinner"></div>'
+  showOverlay('Generuji vizuální diff...')
+  const r=await fetch('/api/compare_drawings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path_a:cmpHistory[0].revA,path_b:cmpHistory[0].revB,layer_filter:diffLayerFilter})})
+  const d=await r.json()
+  hideOverlay()
+  if(d.ok){
+    diffSvgData=d
+    cont.innerHTML=d.svg
+    diffSvgLoaded=true
+    // Naplň filtr hladin
+    const lf=document.getElementById('diff-layer-filter')
+    lf.innerHTML='<option value="">Všechny hladiny</option>'+(d.stats.layers||[]).map(l=>`<option value="${l}">${l}</option>`).join('')
+    initDiffZoom(cont)
+  } else cont.innerHTML=`<span style="color:var(--red);font-family:monospace">Chyba: ${d.error}</span>`
+}
+
+function initDiffZoom(cont){
+  const svg=cont.querySelector('svg')
+  if(!svg) return
+  // Obal obsah do <g> pro zoom/pan
+  const vb=svg.getAttribute('viewBox')||'0 0 1000 580'
+  const [vx,vy,vw,vh]=vb.split(' ').map(Number)
+  let zoom=1, panX=0, panY=0, dragging=false, lastX=0, lastY=0
+
+  function applyTransform(){
+    let g=svg.querySelector('g.diff-pan')
+    if(!g){
+      g=document.createElementNS('http://www.w3.org/2000/svg','g')
+      g.setAttribute('class','diff-pan')
+      while(svg.firstChild) g.appendChild(svg.firstChild)
+      svg.appendChild(g)
+    }
+    g.setAttribute('transform',`translate(${panX},${panY}) scale(${zoom})`)
+  }
+
+  svg.addEventListener('wheel',e=>{
+    e.preventDefault()
+    const rect=svg.getBoundingClientRect()
+    const mx=(e.clientX-rect.left)/rect.width*vw+vx
+    const my=(e.clientY-rect.top)/rect.height*vh+vy
+    const f=e.deltaY>0?0.85:1.18
+    panX=(panX-mx*(f-1))
+    panY=(panY-my*(f-1))
+    zoom*=f
+    applyTransform()
+  },{passive:false})
+
+  svg.addEventListener('mousedown',e=>{if(e.button===0){dragging=true;lastX=e.clientX;lastY=e.clientY;svg.style.cursor='grabbing'}})
+  svg.addEventListener('mouseup',()=>{dragging=false;svg.style.cursor='default'})
+  svg.addEventListener('mouseleave',()=>{dragging=false})
+  svg.addEventListener('mousemove',e=>{
+    if(dragging){
+      const rect=svg.getBoundingClientRect()
+      const scaleX=vw/rect.width, scaleY=vh/rect.height
+      panX+=(e.clientX-lastX)*scaleX/zoom
+      panY+=(e.clientY-lastY)*scaleY/zoom
+      lastX=e.clientX; lastY=e.clientY
+      applyTransform()
+    }
+  })
+}
+
+function renderHistory(){
+  if(!cmpHistory.length)return
+  document.getElementById('history-section').style.display='block'
+  document.getElementById('history-list').innerHTML=cmpHistory.map((h,i)=>`
+    <div class="history-item" onclick="loadHistory(${i})">
+      <div class="h-files">📐 ${h.file_a}</div>
+      <div class="h-files">📐 ${h.file_b}</div>
+      <div class="h-meta">${h.time}</div>
+      <div class="history-badges">
+        ${h.summary.added_total?`<span class="badge new">+${h.summary.added_total}</span>`:''}
+        ${h.summary.removed_total?`<span class="badge deleted">-${h.summary.removed_total}</span>`:''}
+        ${h.summary.moved_total?`<span class="badge changed">↕${h.summary.moved_total}</span>`:''}
+      </div>
+    </div>`).join('')
+}
+
+function loadHistory(idx){
+  cmpData=cmpHistory[idx].data;revA=cmpHistory[idx].revA;revB=cmpHistory[idx].revB
+  cmpFilter='all';diffSvgLoaded=false;renderCompareResults()
+}
+
+// Tooltip pro vizuální diff
+const diffTooltip = document.createElement('div')
+diffTooltip.style.cssText='position:fixed;background:#1e1e1e;border:1px solid #f0a855;border-radius:4px;padding:6px 12px;font-family:monospace;font-size:12px;color:#f0a855;pointer-events:none;display:none;z-index:999;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.5)'
+document.body.appendChild(diffTooltip)
+
+document.addEventListener('mousemove', e=>{
+  const el = e.target
+  if(el.classList && el.classList.contains('diff-resized')){
+    diffTooltip.textContent = el.dataset.tip
+    diffTooltip.style.borderColor='#f0a855'
+    diffTooltip.style.color='#f0a855'
+    diffTooltip.style.display='block'
+    diffTooltip.style.left=(e.clientX+14)+'px'
+    diffTooltip.style.top=(e.clientY-10)+'px'
+    el.style.stroke='#f0a855'; el.style.strokeWidth='12'; el.style.strokeOpacity='0.15'
+  } else if(el.classList && el.classList.contains('diff-text') && el.dataset.tip){
+    diffTooltip.textContent = el.dataset.tip
+    diffTooltip.style.borderColor='rgba(255,255,255,0.2)'
+    diffTooltip.style.color='#e8e8e8'
+    diffTooltip.style.display='block'
+    diffTooltip.style.left=(e.clientX+14)+'px'
+    diffTooltip.style.top=(e.clientY-10)+'px'
+  } else {
+    diffTooltip.style.display='none'
+    document.querySelectorAll('.diff-resized').forEach(r=>{
+      r.style.stroke='transparent'; r.style.strokeWidth='12'; r.style.strokeOpacity='1'
+    })
+  }
+})
+
+let diffActiveTypes = new Set(['lines','blocks','texts','moved','resized'])
+let diffLayerFilter = ''
+let diffSvgData = null  // originální data z API
+
+function toggleDiffType(btn){
+  btn.classList.toggle('active')
+  const t = btn.dataset.type
+  if(diffActiveTypes.has(t)) diffActiveTypes.delete(t)
+  else diffActiveTypes.add(t)
+  applyDiffVisibility()
+}
+
+function applyDiffFilter(){
+  diffLayerFilter = document.getElementById('diff-layer-filter').value
+  // Znovu načti diff s filtrem
+  diffSvgLoaded = false
+  loadDiffDrawing()
+}
+
+function resetDiffView(){
+  const svg = document.querySelector('#diff-container svg')
+  if(!svg) return
+  const g = svg.querySelector('g.diff-pan')
+  if(g) g.setAttribute('transform','translate(0,0) scale(1)')
+}
+
+function applyDiffVisibility(){
+  const cont = document.getElementById('diff-container')
+  // Čáry: stroke barvy
+  const show = (cls, visible) => {
+    cont.querySelectorAll(cls).forEach(el => el.style.opacity = visible ? '' : '0')
+  }
+  // Texty
+  cont.querySelectorAll('.diff-text').forEach(el => {
+    el.style.opacity = diffActiveTypes.has('texts') ? '' : '0'
+  })
+  // Resized
+  cont.querySelectorAll('.diff-resized').forEach(el => {
+    el.style.opacity = diffActiveTypes.has('resized') ? '' : '0'
+  })
+}
+
+function renderLayerStats(stats){
+  const el = document.getElementById('stats-content')
+  if(!stats) return
+  const ls = stats.layer_stats || []
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:16px">
+      <div style="background:var(--bg2);padding:12px"><div style="font-family:monospace;font-size:10px;color:var(--text3);margin-bottom:4px">SMAZÁNO</div><div style="font-size:20px;font-weight:600;color:var(--red);font-family:monospace">${stats.removed}</div></div>
+      <div style="background:var(--bg2);padding:12px"><div style="font-family:monospace;font-size:10px;color:var(--text3);margin-bottom:4px">PŘIDÁNO</div><div style="font-size:20px;font-weight:600;color:var(--green);font-family:monospace">${stats.added}</div></div>
+      <div style="background:var(--bg2);padding:12px"><div style="font-family:monospace;font-size:10px;color:var(--text3);margin-bottom:4px">PŘESUNUTO</div><div style="font-size:20px;font-weight:600;color:#c678dd;font-family:monospace">${stats.moved}</div></div>
+      <div style="background:var(--bg2);padding:12px"><div style="font-family:monospace;font-size:10px;color:var(--text3);margin-bottom:4px">DÉLKA ZMĚNĚNA</div><div style="font-size:20px;font-weight:600;color:var(--orange);font-family:monospace">${stats.resized}</div></div>
+    </div>
+    <div style="font-family:monospace;font-size:11px;color:var(--text3);margin-bottom:8px;letter-spacing:.05em">DÉLKY ČÁROVNÁNÍ PER HLADINA</div>
+    <table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:12px">
+      <thead><tr>
+        <th style="text-align:left;padding:6px 10px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:11px">HLADINA</th>
+        <th style="text-align:right;padding:6px 10px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:11px">REV A</th>
+        <th style="text-align:right;padding:6px 10px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:11px">REV B</th>
+        <th style="text-align:right;padding:6px 10px;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:11px">ROZDÍL</th>
+      </tr></thead>
+      <tbody>${ls.map(r=>{
+        const dc = r.diff>0?'color:var(--green)':r.diff<0?'color:var(--red)':'color:var(--text3)'
+        const ds = r.diff>0?'+'+r.diff.toFixed(1):r.diff.toFixed(1)
+        return `<tr>
+          <td style="padding:5px 10px;border-bottom:1px solid var(--border)">${r.layer}</td>
+          <td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right">${r.len_a.toFixed(1)}</td>
+          <td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right">${r.len_b.toFixed(1)}</td>
+          <td style="padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;${dc}">${r.diff!==0?ds:'='}</td>
+        </tr>`}).join('')}
+      </tbody>
+    </table>
+    <div style="font-family:monospace;font-size:10px;color:var(--text3);margin-top:8px">Délky v jednotkách výkresu</div>`
+}
+
+async function switchCmpTab(name,el){
+  document.querySelectorAll('#cmp-results .tab').forEach(t=>t.classList.remove('active'));el.classList.add('active')
+  document.getElementById('cmp-tab-table').style.display=name==='table'?'block':'none'
+  document.getElementById('cmp-tab-drawing').style.display=name==='drawing'?'flex':'none'
+  document.getElementById('cmp-tab-stats').style.display=name==='stats'?'block':'none'
+  if(name==='drawing'&&!diffSvgLoaded) await loadDiffDrawing()
+  if(name==='stats'&&diffSvgData) renderLayerStats(diffSvgData.stats)
+}
+
+function backToSetup(){
+  document.getElementById('cmp-results').style.display='none'
+  document.getElementById('cmp-setup-wrap').style.display='flex'
+}
+
+function switchMode(name,el){
+  document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active')
+  document.getElementById('mode-analyze').classList.toggle('active',name==='analyze')
+  document.getElementById('mode-compare').classList.toggle('active',name==='compare')
+  document.getElementById('sidebar-analyze').style.display=name==='analyze'?'flex':'none'
+}
+
+function showOverlay(msg){document.getElementById('overlay-msg').textContent=msg;document.getElementById('overlay').style.display='flex'}
+function hideOverlay(){document.getElementById('overlay').style.display='none'}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+let chatHistory=[]
+let chatApiKey=localStorage.getItem('dwg_chat_api_key')||''
+let chatHasServerKey=false
+
+fetch('/api/has_api_key').then(r=>r.json()).then(d=>{
+  chatHasServerKey=d.has_key
+  if(!chatHasServerKey){
+    document.getElementById('chat-key-bar').style.display='flex'
+    if(chatApiKey) document.getElementById('chat-api-key').value=chatApiKey
+  }
+}).catch(()=>{})
+
+function toggleChat(){
+  const p=document.getElementById('chat-panel')
+  p.classList.toggle('open')
+  if(p.classList.contains('open')) setTimeout(()=>document.getElementById('chat-input').focus(),100)
+}
+
+function saveApiKey(){
+  const key=document.getElementById('chat-api-key').value.trim()
+  if(!key){alert('Zadejte API klíč');return}
+  chatApiKey=key
+  localStorage.setItem('dwg_chat_api_key',key)
+  document.getElementById('chat-key-bar').style.display='none'
+}
+
+function buildChatContext(){
+  const lines=[]
+  const isCompare=document.getElementById('mode-compare').classList.contains('active')
+  lines.push('Režim: '+(isCompare?'Porovnání revizí':'Analýza bloků'))
+  if(!isCompare&&activeIdx>=0&&files[activeIdx]&&files[activeIdx].ok){
+    const f=files[activeIdx]
+    lines.push('Soubor: '+f.file)
+    lines.push('Vložení celkem: '+f.totalInserts+', unikátních bloků: '+f.blocks.length)
+    const top=f.blocks.slice(0,8).map(b=>b.name+'('+b.count+'×)').join(', ')
+    lines.push('Nejčastější bloky: '+top)
+    const wa=f.blocks.filter(b=>b.inserts.some(i=>i.attrs&&i.attrs.length))
+    if(wa.length) lines.push('Bloky s atributy: '+wa.map(b=>b.name).join(', '))
+  }
+  if(isCompare&&cmpData&&cmpData.ok){
+    const s=cmpData.summary
+    lines.push('Porovnání: '+cmpData.file_a+' vs '+cmpData.file_b)
+    lines.push('Přidáno: '+s.added_total+' vložení, odebráno: '+s.removed_total+', přesunuto: '+s.moved_total)
+    lines.push('Nové bloky: '+s.new+', smazané: '+s.deleted+', změněné: '+s.changed+', beze změny: '+s.same)
+    const notable=cmpData.blocks.filter(b=>b.status!=='same').slice(0,15)
+    if(notable.length) lines.push('Změny: '+notable.map(b=>b.name+'('+b.status+','+(b.diff>0?'+':'')+b.diff+')').join(', '))
+    if(diffSvgData&&diffSvgData.stats){
+      const st=diffSvgData.stats
+      lines.push('Vizuální diff: -'+st.removed+' entit, +'+st.added+', přesunuto '+st.moved+', délka změněna '+st.resized)
+    }
+  }
+  return lines.join('\n')
+}
+
+async function sendChat(){
+  const input=document.getElementById('chat-input')
+  const msg=input.value.trim()
+  if(!msg) return
+  const key=chatHasServerKey?'':chatApiKey
+  if(!chatHasServerKey&&!key){
+    document.getElementById('chat-key-bar').style.display='flex'
+    document.getElementById('chat-api-key').focus()
+    return
+  }
+  input.value=''
+  chatAutoResize(input)
+  appendChatMsg('user',msg)
+  chatHistory.push({role:'user',content:msg})
+  const thinking=document.createElement('div')
+  thinking.className='chat-thinking'
+  thinking.textContent='●●●'
+  document.getElementById('chat-messages').appendChild(thinking)
+  scrollChatBottom()
+  document.getElementById('chat-send-btn').disabled=true
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,history:chatHistory.slice(0,-1),context:buildChatContext(),api_key:key})})
+    const d=await r.json()
+    thinking.remove()
+    if(d.ok){
+      appendChatMsg('assistant',d.response)
+      chatHistory.push({role:'assistant',content:d.response})
+      if(chatHistory.length>40) chatHistory=chatHistory.slice(-40)
+    } else {
+      appendChatMsg('error','Chyba: '+d.error)
+    }
+  }catch(e){
+    thinking.remove()
+    appendChatMsg('error','Síťová chyba: '+e.message)
+  }
+  document.getElementById('chat-send-btn').disabled=false
+  scrollChatBottom()
+}
+
+function appendChatMsg(role,text){
+  const msgs=document.getElementById('chat-messages')
+  const div=document.createElement('div')
+  div.className='chat-msg '+role
+  div.textContent=text
+  msgs.appendChild(div)
+  scrollChatBottom()
+}
+
+function scrollChatBottom(){
+  const msgs=document.getElementById('chat-messages')
+  msgs.scrollTop=msgs.scrollHeight
+}
+
+function chatKeydown(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat()}
+}
+
+function chatAutoResize(el){
+  el.style.height='36px'
+  el.style.height=Math.min(el.scrollHeight,120)+'px'
+}
+</script>
+</body>
+</html>
